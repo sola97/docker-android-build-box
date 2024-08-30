@@ -1,216 +1,45 @@
-name: Docker Image CI
+name: ci
 
 on:
-  workflow_dispatch:  # manual trigger
-  schedule:
-      # ┌───────────── minute (0 - 59)
-      # │ ┌───────────── hour (0 - 23)
-      # │ │ ┌───────────── day of the month (1 - 31)
-      # │ │ │ ┌───────────── month (1 - 12 or JAN-DEC)
-      # │ │ │ │ ┌───────────── day of the week (0 - 6 or SUN-SAT)
-      # │ │ │ │ │
-      # │ │ │ │ │
-      # │ │ │ │ │
-      # * * * * *
-    - cron: '0 0 * * 1'  # build every Monday
   push:
-    branches: [ master, dev ]
-    tags:
-      - '*.*.*'
-    paths-ignore:
-      - '*.md'
-      - 'howto.txt'
-      - 'LICENSE'
-  pull_request:
-    branches: [ master ]
-    paths-ignore:
-      - '*.md'
-      - 'howto.txt'
-      - 'LICENSE'
-
+    branches:
+      - 'master'
+      - 'dev'
+  workflow_dispatch:
 
 jobs:
-
-  build:
-
+  docker:
     runs-on: ubuntu-latest
-    env:
-      IMAGE_NAME: mingc/android-build-box
-      TAG: $GITHUB_SHA
-
     steps:
-    - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+      - name: Initialization environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          docker rmi `docker images -q`
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /etc/mysql /etc/php
+          sudo -E apt-get -y purge azure-cli* docker* ghc* zulu* hhvm* llvm* firefox* google* dotnet* aspnetcore* powershell* openjdk* adoptopenjdk* mysql* php* mongodb* moby* snap* || true
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq install libfuse-dev $(curl -fsSL git.io/depends-ubuntu-2204)
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+          sudo timedatectl set-timezone "Asia/Shanghai"
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/base-android-build-box:latest
 
-    - name: Docker meta
-      id: meta
-      uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
-      with:
-        images: mingc/android-build-box
-        labels: |
-          org.opencontainers.image.url=https://hub.docker.com/r/mingc/android-build-box
-          org.opencontainers.image.vendor=Ming Chen
-
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf
-      with:
-        platforms: amd64,arm64
-
-    - name: Available platforms
-      run: echo ${{ steps.qemu.outputs.platforms }}
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db
-      with:
-        driver: docker
-
-    - name: Pre build
-      run: |
-        # possible ref examples:
-        #   refs/pull/138/merge
-        #   refs/heads/master
-        #   refs/tags/1.25.0
-        echo "GITHUB_REF: $GITHUB_REF"
-
-        # possible event name examples:
-        #   push
-        #   pull_request
-        echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
-        echo "GITHUB_EVENT_PATH: $GITHUB_EVENT_PATH"
-        echo "GITHUB_WORKFLOW: $GITHUB_WORKFLOW"
-        echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
-        echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
-        echo "GITHUB_ACTION: $GITHUB_ACTION"
-        echo "GITHUB_JOB: $GITHUB_JOB"
-
-        uname -a
-        df -h
-        docker images
-        docker ps -a
-        echo "GITHUB_SHA: $GITHUB_SHA"
-
-        # Set up env.TAG
-        echo "TAG=$GITHUB_SHA" >> $GITHUB_ENV
-        echo "TAG: $TAG"
-
-        # Remove exist images to free disk space
-        docker rmi $(docker image ls -a | grep -vE 'ubuntu.*22\.04|moby/buildkit' | awk 'NR>1 {print $3}')
-        #docker rmi $(docker images | grep -v IMAGE | awk '{print $3}')
-        docker images
-
-        # Remove unneeded and installed software to free up space
-        sudo rm -rf /usr/local/lib/android/sdk
-        sudo rm -rf /opt/hostedtoolcache
-
-        # check disk space one more time
-        df -h
-
-    - name: Build and load local docker image for PRs or Not Tags
-      uses: docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445
-      if: github.event_name == 'pull_request' || !startsWith(github.ref, 'refs/tags/')
-      with:
-        context: .
-        load: true
-        tags: ${{ env.IMAGE_NAME}}:${{ env.TAG}}
-
-    - name: Build and load local docker image for Not PRs and Tags
-      uses: docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445
-      if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/')
-      with:
-        context: .
-        load: true
-        tags: ${{ env.IMAGE_NAME}}:${{ env.TAG}}
-        build-args: |
-          ANDROID_SDK_TOOLS_TAGGED=tagged
-          ANDROID_SDKS=tagged
-          NDK_TAGGED=tagged
-          NODE_TAGGED=tagged
-          BUNDLETOOL_TAGGED=tagged
-          FLUTTER_TAGGED=tagged
-          JENV_TAGGED=tagged
-
-    - name: Inspect local docker image
-      run: |
-        docker images
-        docker inspect ${{ env.IMAGE_NAME}}:${{ env.TAG}}
-
-    - name: Test
-      run: |
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} env
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} flutter --version
-
-        echo "Show current java version"
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} java -version
-
-        echo "Set java env to 8"
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c '. $HOME/.bash_profile && jenv local 1.8 && java -version'
-
-        echo "Test jenv recognizes Java 11"
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c 'jenv local 11 && java -version'
-
-        echo "Test jenv recognizes Java 17"
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c 'jenv local 17 && java -version'
-
-        docker run -v `pwd`:/project --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c 'echo "Current directory: $PWD"'
-
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c 'ls -l $ANDROID_SDK_HOME'
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c 'ls -l $ANDROID_NDK_HOME'
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c 'ls -l /opt/android-sdk/ndk/'
-
-        # Test Node
-        echo "Test Node installation"
-        docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c 'curl -fsSL https://deb.nodesource.com/test | bash -'
-
-        cd test_projects/SampleProject/
-        docker run --rm -v `pwd`:/project ${{ env.IMAGE_NAME}}:${{ env.TAG}} bash -c './gradlew build'
-
-    - name: Login to DockerHub
-      # if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
-      if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
-      uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    - name: Build and push - for Not PRs and Not Tags
-      uses: docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445
-      if: github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/')
-      with:
-        context: .
-        platforms: linux/amd64
-        push: ${{ startsWith(github.ref, 'refs/heads/master') }}
-        tags: mingc/android-build-box:latest, ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-
-    - name: Build and push - for Not PRs and Tags
-      uses: docker/build-push-action@5176d81f87c23d6fc96624dfdbcd9f3830bbe445
-      if: github.event_name != 'pull_request' && startsWith(github.ref, 'refs/tags/')
-      with:
-        context: .
-        platforms: linux/amd64
-        push: ${{ startsWith(github.ref, 'refs/tags/') }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        build-args: |
-          ANDROID_SDK_TOOLS_TAGGED=tagged
-          ANDROID_SDKS=tagged
-          NDK_TAGGED=tagged
-          NODE_TAGGED=tagged
-          BUNDLETOOL_TAGGED=tagged
-          FLUTTER_TAGGED=tagged
-          JENV_TAGGED=tagged
-
-    - name: Modify Readme to list latest software
-      if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master')
-      run: |
-        printf "\n\n \"Latest\" Tag Software:\n\n" >> README.md
-        TEMP=$(docker run --rm ${{ env.IMAGE_NAME}}:${{ env.TAG}} cat '/root/installed-versions.txt')
-        echo "$TEMP" | tail --lines=+2 >> README.md
-
-    - name: Update Docker Hub Description
-      if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master')
-      uses: peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae
-      with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-        repository: mingc/android-build-box
-        enable-url-completion: true
