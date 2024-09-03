@@ -13,11 +13,8 @@ RUN apt-get update && apt-get install -y \
 
 # 安装 jenv 并配置
 RUN git clone https://github.com/jenv/jenv.git ~/.jenv \
-    && echo 'export PATH="$HOME/.jenv/bin:$PATH"' >> ~/.bashrc \
-    && echo 'eval "$(jenv init -)"' >> ~/.bashrc \
-    && . ~/.bashrc \
-    && jenv add /usr/lib/jvm/java-11-openjdk-amd64/ \
-    && jenv global 11
+    && echo 'export PATH="$HOME/.jenv/bin:$PATH"' >> ~/.profile \
+    && echo 'eval "$(jenv init -)"' >> ~/.profile
 
 # 安装 Android SDK 和构建工具
 RUN mkdir -p /opt/android-sdk && cd /opt/android-sdk \
@@ -25,6 +22,11 @@ RUN mkdir -p /opt/android-sdk && cd /opt/android-sdk \
     && unzip commandlinetools-linux.zip && rm commandlinetools-linux.zip \
     && yes | ./cmdline-tools/bin/sdkmanager --sdk_root=/opt/android-sdk --licenses \
     && ./cmdline-tools/bin/sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "build-tools;34.0.0" "platforms;android-33"
+
+# 设置 jenv 并设置 Java 版本
+RUN . ~/.profile \
+    && jenv add /usr/lib/jvm/java-11-openjdk-amd64/ \
+    && jenv global 11
 
 # 配置环境变量
 ENV ANDROID_HOME=/opt/android-sdk
@@ -35,6 +37,6 @@ RUN echo 'export PATH="$HOME/.jenv/bin:$PATH"' >> ~/.profile \
     && echo 'eval "$(jenv init -)"' >> ~/.profile
 
 # 验证安装
-RUN java -version && jenv versions && sdkmanager --list
+RUN . ~/.profile && java -version && jenv versions && sdkmanager --list
 
 CMD ["/bin/bash"]
