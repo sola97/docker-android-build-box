@@ -12,10 +12,11 @@ RUN apt-get update && apt-get install -y \
     && echo Asia/Shanghai > /etc/timezone
 
 # 安装 Android SDK 和构建工具
-RUN mkdir -p /opt/android-sdk/cmdline-tools/latest \
-    && cd /opt/android-sdk/cmdline-tools/latest \
+RUN mkdir -p /opt/android-sdk/cmdline-tools \
+    && cd /opt/android-sdk/cmdline-tools \
     && curl -o commandlinetools-linux.zip https://dl.google.com/android/repository/commandlinetools-linux-7583922_latest.zip \
-    && unzip commandlinetools-linux.zip && rm commandlinetools-linux.zip \
+    && unzip commandlinetools-linux.zip -d latest && rm commandlinetools-linux.zip \
+    && mv latest/cmdline-tools/* latest/ && rm -rf latest/cmdline-tools \
     && yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk --licenses \
     && /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "build-tools;34.0.0" "platforms;android-33"
 
@@ -25,6 +26,6 @@ ENV PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-too
 
 # 验证安装
 RUN java -version \
-    && sdkmanager --sdk_root=/opt/android-sdk --list
+    && /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk --list
 
 CMD ["/bin/bash"]
