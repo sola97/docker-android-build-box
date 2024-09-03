@@ -1,7 +1,11 @@
 # 使用Ubuntu作为基础镜像
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 
-# 设置时区和安装curl
+# 设置环境变量以避免 tzdata 配置交互提示
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+
+# 安装时区数据包，设置时区并安装其他依赖项
 RUN apt-get update && apt-get install -y \
     tzdata curl git unzip openjdk-11-jdk \
     && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
