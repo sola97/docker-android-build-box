@@ -11,32 +11,20 @@ RUN apt-get update && apt-get install -y \
     && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && echo Asia/Shanghai > /etc/timezone
 
-# 安装 jenv 并配置
-RUN git clone https://github.com/jenv/jenv.git ~/.jenv \
-    && echo 'export PATH="$HOME/.jenv/bin:$PATH"' >> ~/.profile \
-    && echo 'eval "$(jenv init -)"' >> ~/.profile
-
 # 安装 Android SDK 和构建工具
-RUN mkdir -p /opt/android-sdk && cd /opt/android-sdk \
+RUN mkdir -p /opt/android-sdk/cmdline-tools/latest \
+    && cd /opt/android-sdk/cmdline-tools/latest \
     && curl -o commandlinetools-linux.zip https://dl.google.com/android/repository/commandlinetools-linux-7583922_latest.zip \
     && unzip commandlinetools-linux.zip && rm commandlinetools-linux.zip \
-    && yes | ./cmdline-tools/bin/sdkmanager --sdk_root=/opt/android-sdk --licenses \
-    && ./cmdline-tools/bin/sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "build-tools;34.0.0" "platforms;android-33"
-
-# 设置 jenv 并设置 Java 版本
-RUN . ~/.profile \
-    && jenv add /usr/lib/jvm/java-11-openjdk-amd64/ \
-    && jenv global 11
+    && yes | /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk --licenses \
+    && /opt/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "build-tools;34.0.0" "platforms;android-33"
 
 # 配置环境变量
 ENV ANDROID_HOME=/opt/android-sdk
-ENV PATH=$PATH:$ANDROID_HOME/cmdline-tools/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
-
-# 安装 jenv 环境变量
-RUN echo 'export PATH="$HOME/.jenv/bin:$PATH"' >> ~/.profile \
-    && echo 'eval "$(jenv init -)"' >> ~/.profile
+ENV PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/build-tools/34.0.0
 
 # 验证安装
-RUN . ~/.profile && java -version && jenv versions && sdkmanager --list
+RUN java -version \
+    && sdkmanager --sdk_root=/opt/android-sdk --list
 
 CMD ["/bin/bash"]
