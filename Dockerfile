@@ -5,11 +5,18 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Shanghai
 
-# 安装时区数据包，设置时区并安装其他依赖项
+# 安装时区数据包，设置时区，安装语言包并设置中文支持和其他依赖项
 RUN apt-get update && apt-get install -y \
-    tzdata curl git unzip openjdk-11-jdk \
+    tzdata curl git unzip openjdk-11-jdk locales \
     && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-    && echo Asia/Shanghai > /etc/timezone
+    && echo Asia/Shanghai > /etc/timezone \
+    && locale-gen zh_CN.UTF-8 \
+    && update-locale LANG=zh_CN.UTF-8
+
+# 配置语言环境
+ENV LANG=zh_CN.UTF-8
+ENV LANGUAGE=zh_CN:zh
+ENV LC_ALL=zh_CN.UTF-8
 
 # 安装 Android SDK 和构建工具
 RUN mkdir -p /opt/android-sdk/cmdline-tools \
