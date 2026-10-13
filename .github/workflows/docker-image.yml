@@ -36,3 +36,5 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/base-android-build-box:latest
 
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: 'false'
